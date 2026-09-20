@@ -11,6 +11,7 @@
       ],
       "js": [
         "src/core/keymap.js",
+        "src/core/syllable-parser.js",
         "src/content.js"
       ],
       "run_at": "document_idle"

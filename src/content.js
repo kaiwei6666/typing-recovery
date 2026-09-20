@@ -1,11 +1,7 @@
 console.log("Typing Recovery loaded!");
 
 function convertToZhuyin(text) {
-  return [...text.toLowerCase()]
-    .map((char) => {
-      return globalThis.ZHUYIN_KEY_MAP[char] ?? char;
-    })
-    .join("");
+  return globalThis.TypingRecovery.parseKeystrokes(text).zhuyin;
 }
 
 function isSupportedInput(element) {
@@ -37,10 +33,10 @@ function recoverCurrentInput(element) {
     replaceEnd
   );
 
-  const recoveredText = convertToZhuyin(originalText);
+  const recovery = globalThis.TypingRecovery.parseKeystrokes(originalText);
 
   element.setRangeText(
-    recoveredText,
+    recovery.zhuyin,
     replaceStart,
     replaceEnd,
     "end"
@@ -52,6 +48,8 @@ function recoverCurrentInput(element) {
       bubbles: true
     })
   );
+
+  return recovery;
 }
 
 document.addEventListener("keydown", (event) => {
