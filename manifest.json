@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Typing Recovery",
+  "version": "0.1.0",
+  "description": "Recover Traditional Chinese Zhuyin typed with the wrong keyboard layout.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.google.com/*",
+        "https://www.google.com.tw/*"
+      ],
+      "js": [
+        "src/core/keymap.js",
+        "src/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
