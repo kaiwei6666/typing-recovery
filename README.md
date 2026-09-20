@@ -1,6 +1,6 @@
 # Typing Recovery
 
-修復忘記切換注音輸入法時打出的英文鍵位。目前完成英文鍵位轉注音，以及第一版音節結構解析；尚未產生中文字候選或自動偵測誤打。
+修復忘記切換注音輸入法時打出的英文鍵位。目前完成英文鍵位轉注音、第一版音節結構解析，以及離線單字候選選擇。尚未做上下文選字或自動偵測誤打。
 
 ## 在 Chrome 使用
 
@@ -8,8 +8,34 @@
 2. 載入未封裝項目，選擇包含 `manifest.json` 的專案資料夾。
 3. 開啟 `https://www.google.com/` 或 `https://www.google.com.tw/`。
 4. 在搜尋框輸入 `su3cl3`，按 `Ctrl+Shift+Y`，結果為 `ㄋㄧˇㄏㄠˇ`。
+5. 若要還原成中文，直接對原始鍵位 `su3cl3` 按 `Ctrl+Shift+U`，在候選視窗確認「你好」後點「套用替換」。也可以把「你」改選為「妳」。
 
-有反白時只替換選取範圍；沒有反白時處理整個輸入框。更新程式後，需重新載入擴充功能並重新整理 Google 頁面。Chrome 新分頁不在支援範圍內。
+兩個快捷鍵是不同入口，不需要先按 Y 再按 U；候選查詢需要原始英文鍵位。有反白時只處理選取範圍；沒有反白時處理整個輸入框。候選視窗按 Esc 或「取消」不會改動原文。
+
+更新程式後，需重新載入擴充功能並重新整理 Google 頁面。Chrome 新分頁不在支援範圍內。支援可編輯的 textarea 與 text/search/url/tel input；密碼、唯讀、停用及不支援文字選取的欄位不處理，輸入法組字中也不觸發。
+
+## Phase 3：離線中文字候選
+
+新增 `src/core/dictionary.js`、`src/core/candidates.js` 及 `src/candidate-panel.js`，由 manifest 依序載入。
+
+- 字典採用小麥注音單字表的 Big5 漢字子集：1,343 種帶聲調讀音、14,324 筆字候選。來源版本、篩選方式與 MIT 授權保存在 [third_party/mcbopomofo](third_party/mcbopomofo/README.md)。不涵蓋所有罕用字與異體字。
+- 依確切聲調查詢，候選依原始字典順序排列；不宣稱第一個候選就是語境中正確的字。
+- 查不到候選、音節不完整、缺聲調或孤立聲調都保留原始鍵位。字典缺少某個讀音不代表該讀音必定非法。
+- 每個音節都可改選候選或「保留原文」，確認預覽後才替換。
+- 一聲必須有半形空白。例如 `5j/ jp6` 可選成「中文」；預設移除已轉換音節的一聲空白鍵。可勾選「保留原始空白」得到「中 文」。多餘空白及其他字元保留。
+- 候選視窗一次最多處理 120 個音節；更長輸入請反白分段處理。開啟後若輸入框內容被改動，會拒絕覆蓋並提示重新開啟。
+- 字典隨擴充功能載入，查詢不連線、不儲存輸入歷史，不新增網站權限。
+
+核心 API 範例（需先載入 parser、dictionary、candidates）：
+
+```js
+const recovery = TypingRecovery.getCandidateRecovery("su3cl3");
+// recovery.units[0].candidates 包含「你」「妳」等候選。
+TypingRecovery.composeCandidates(recovery, ["妳", "好"]); // "妳好"
+TypingRecovery.composeCandidates(recovery, ["", "好"]);   // "su3好"
+```
+
+可測試：`su3cl3` → 你好、`5j/ jp6` → 中文、`a87` → 嗎，以及反白部分文字後選字。
 
 ## Phase 2：音節解析
 
@@ -53,8 +79,18 @@ const result = TypingRecovery.parseKeystrokes("su3cl3");
 node --test tests/recovery.test.cjs
 ```
 
-涵蓋音節邊界、聲調、不完整輸入、Unicode、原文重建，以及使用模擬輸入框的快捷鍵整合。模擬測試不能取代 Chrome 實測。
+涵蓋音節邊界、聲調、不完整輸入、Unicode、原文重建、字典查詢、候選組合與使用模擬輸入框的快捷鍵整合。
+
+選用的瀏覽器整合測試需 Python 與 Playwright：
+
+```sh
+python -m pip install playwright
+python -m playwright install chromium
+python tests/browser_smoke.py
+```
+
+這會在全新的無頭 Chromium 設定檔載入真正的擴充功能，將 Google 網址攔截為本機測試頁，驗證候選選擇、取消、局部替換、游標、空白、過期輸入保護及窄視窗。它不使用你的 Chrome 設定檔，也不依賴 Google 現行版面；Google 真實搜尋框仍需手動驗收。
 
 ## 接下來
 
-補足合法讀音驗證與歧義處理，再接入繁體中文候選字典。保留原始鍵位及範圍，方便後續選字與局部修正。
+接續處理音節切分歧義、詞彙候選與上下文排序。現階段候選視窗是手動觸發，尚未實作即時浮動提示、Tab 接受或混合英文的自動偵測。

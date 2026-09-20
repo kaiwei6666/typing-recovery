@@ -1,0 +1,131 @@
+"""Optional browser integration test: pip install playwright; playwright install chromium.
+
+Loads the actual extension into a fresh Chromium profile. Google requests are
+fulfilled with a local fixture so these checks do not depend on Google's UI.
+"""
+import argparse
+import tempfile
+from pathlib import Path
+
+from playwright.sync_api import sync_playwright, expect
+
+ROOT = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser()
+parser.add_argument("--screenshot", type=Path)
+args = parser.parse_args()
+
+FIXTURE = """<!doctype html><html lang="zh-Hant"><meta charset="utf-8">
+<title>Typing Recovery test</title><style>
+body{font:18px system-ui;padding:60px;background:#f8fafc;color:#334155}
+textarea{display:block;width:600px;height:100px;font:24px system-ui;margin-top:20px}
+</style><h1>Typing Recovery 測試頁</h1><label for="query">搜尋文字</label>
+<textarea id="query"></textarea><input id="password" type="password">
+<script>window.inputEvents=0;document.querySelector('#query').addEventListener('input',()=>window.inputEvents++);</script>
+</html>"""
+
+with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
+    assert Path(profile).resolve().parent == Path(tempfile.gettempdir()).resolve()
+    with sync_playwright() as p:
+        context = p.chromium.launch_persistent_context(
+            profile, channel="chromium", headless=True, viewport={"width": 1024, "height": 900},
+            args=[f"--disable-extensions-except={ROOT}", f"--load-extension={ROOT}"],
+        )
+        context.route("**/*", lambda route: route.fulfill(content_type="text/html", body=FIXTURE))
+        page = context.new_page()
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto("https://www.google.com/")
+        query = page.locator("#query")
+        panel = page.locator("#typing-recovery-panel")
+
+        def open_candidates(raw):
+            query.fill(raw)
+            query.press("Control+Shift+U")
+            expect(panel.locator("dialog")).to_be_visible()
+
+        open_candidates("su3cl3")
+        expect(query).to_have_value("su3cl3")
+        expect(panel.locator("output")).to_have_text("你好")
+        panel.locator("select").first.select_option("妳")
+        expect(panel.locator("output")).to_have_text("妳好")
+        if args.screenshot:
+            page.screenshot(path=str(args.screenshot), full_page=True)
+        events_before = page.evaluate("window.inputEvents")
+        panel.get_by_role("button", name="套用替換").click()
+        expect(query).to_have_value("妳好")
+        expect(panel).to_have_count(0)
+        expect(query).to_be_focused()
+        assert page.evaluate("window.inputEvents") == events_before + 1
+        print("PASS: actual extension injection, candidate selection, input event and focus")
+
+        open_candidates("su3cl3")
+        page.keyboard.press("Escape")
+        expect(panel).to_have_count(0)
+        expect(query).to_have_value("su3cl3")
+        query.press("Control+Shift+U")
+        panel.get_by_role("button", name="取消", exact=True).click()
+        expect(query).to_have_value("su3cl3")
+        print("PASS: Escape and Cancel preserve original input")
+
+        query.fill("前🙂su3cl3後")
+        query.evaluate("element => element.setSelectionRange(3, 9)")
+        query.press("Control+Shift+U")
+        expect(panel.locator("output")).to_have_text("你好")
+        panel.get_by_role("button", name="套用替換").click()
+        expect(query).to_have_value("前🙂你好後")
+        assert query.evaluate("element => element.selectionStart") == 5
+        print("PASS: selected range preserves surrounding Unicode text and cursor")
+
+        open_candidates("5j/ jp6")
+        expect(panel.locator("output")).to_have_text("中文")
+        panel.get_by_role("checkbox").check()
+        expect(panel.locator("output")).to_have_text("中 文")
+        panel.get_by_role("checkbox").uncheck()
+        panel.get_by_role("button", name="套用替換").click()
+        expect(query).to_have_value("中文")
+        print("PASS: first-tone spaces can be removed or retained")
+
+        open_candidates("s")
+        expect(panel.get_by_role("button", name="套用替換")).to_be_disabled()
+        expect(panel.locator("output")).to_have_text("s")
+        panel.get_by_role("button", name="取消", exact=True).click()
+        open_candidates("su3@1m33🙂")
+        expect(panel.locator("output")).to_have_text("你@1m33🙂")
+        panel.get_by_role("button", name="套用替換").click()
+        expect(query).to_have_value("你@1m33🙂")
+        print("PASS: missing/unknown readings and orphan tones are not lost")
+
+        for dispatch in (False, True):
+            open_candidates("su3cl3")
+            query.evaluate("""(element, dispatch) => {
+                element.value = 'changed';
+                if (dispatch) element.dispatchEvent(new Event('input', {bubbles:true}));
+            }""", dispatch)
+            if not dispatch:
+                panel.get_by_role("button", name="套用替換").click()
+            expect(panel.get_by_role("button", name="套用替換")).to_be_disabled()
+            expect(query).to_have_value("changed")
+            panel.get_by_role("button", name="取消", exact=True).click()
+        print("PASS: stale input is protected with and without an input event")
+
+        open_candidates("su3" * 121)
+        expect(panel.get_by_role("button", name="套用替換")).to_be_disabled()
+        expect(panel.locator("select")).to_have_count(0)
+        panel.get_by_role("button", name="取消", exact=True).click()
+        query.fill("su3cl3")
+        query.press("Control+Shift+Y")
+        expect(query).to_have_value("ㄋㄧˇㄏㄠˇ")
+        password = page.locator("#password")
+        password.fill("su3")
+        password.press("Control+Shift+U")
+        expect(panel).to_have_count(0)
+        print("PASS: length limit, original shortcut and password exclusion")
+
+        open_candidates("su3cl3")
+        page.set_viewport_size({"width": 375, "height": 667})
+        bounds = panel.locator("dialog").bounding_box()
+        assert bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= 375
+        panel.get_by_role("button", name="取消", exact=True).click()
+        assert not errors, errors
+        print("PASS: narrow viewport; no page errors")
+        context.close()

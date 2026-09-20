@@ -10,7 +10,7 @@ const manifest = JSON.parse(readFileSync(resolve(root, "manifest.json"), "utf8")
 function loadExtension() {
   class Input {
     constructor(value, start = 0, end = start) {
-      Object.assign(this, { value, selectionStart: start, selectionEnd: end, events: [] });
+      Object.assign(this, { value, selectionStart: start, selectionEnd: end, events: [], type: "text", isConnected: true });
     }
     setRangeText(text, start, end, mode) {
       assert.equal(mode, "end");
@@ -153,4 +153,89 @@ test("other keys and unsupported targets are ignored", () => {
   assert.equal(input.value, "su3");
   context.document.activeElement = {};
   handlers.keydown({ ctrlKey: true, shiftKey: true, code: "KeyY" });
+});
+
+test("bundled dictionary covers ni hao, neutral tone and tonal distinctions", () => {
+  const { context } = loadExtension();
+  const get = context.TypingRecovery.getCandidateRecovery;
+  const result = get("su3cl3");
+  assert.equal(result.units[0].candidates[0], "你");
+  assert.ok(result.units[0].candidates.includes("妳"));
+  assert.equal(result.units[1].candidates[0], "好");
+  assert.ok(get("a87").units[0].candidates.includes("嗎"));
+  assert.ok(get("g4").units[0].candidates.includes("是"));
+  assert.ok(!get("g3").units[0].candidates.includes("是"));
+});
+
+test("candidate composition supports alternate choices and preserving raw keys", () => {
+  const { getCandidateRecovery: get, composeCandidates: compose } = loadExtension().context.TypingRecovery;
+  const result = get("su3cl3");
+  assert.equal(compose(result, ["你", "好"]), "你好");
+  assert.equal(compose(result, ["妳", "好"]), "妳好");
+  assert.equal(compose(result, ["", "好"]), "su3好");
+  assert.throws(() => compose(result, ["錯", "好"]), /not a candidate/);
+  assert.throws(() => compose(result, ["你"]), /One choice/);
+});
+
+test("unknown readings and incomplete input have no fabricated candidates", () => {
+  const { context } = loadExtension();
+  const get = context.TypingRecovery.getCandidateRecovery;
+  assert.equal(get("su").units[0].status, "missing-tone");
+  assert.equal(get("s3").units[0].status, "incomplete-body");
+  assert.equal(get("1m3").units[0].status, "unlisted-reading");
+  for (const raw of ["su", "s3", "1m3"]) assert.equal(get(raw).units[0].candidates.length, 0);
+  const result = get("su3@1m33🙂");
+  assert.equal(context.TypingRecovery.composeCandidates(result, ["你", ""]), "你@1m33🙂");
+});
+
+test("only the first-tone delimiter of a converted syllable is consumed", () => {
+  const { getCandidateRecovery: get, composeCandidates: compose } = loadExtension().context.TypingRecovery;
+  assert.equal(compose(get("5j/ jp6"), ["中", "文"]), "中文");
+  assert.equal(compose(get("5j/ jp6"), ["中", "文"], true), "中 文");
+  assert.equal(compose(get("5j/  jp6"), ["中", "文"]), "中 文");
+  assert.equal(compose(get("5j/ jp6"), ["", "文"]), "5j/ 文");
+  assert.equal(compose(get("su3 cl3"), ["你", "好"]), "你 好");
+});
+
+test("dictionary contains unique Han candidates and no empty entries", () => {
+  const dictionary = loadExtension().context.ZHUYIN_DICTIONARY;
+  assert.ok(Object.keys(dictionary).length > 1000);
+  for (const [reading, chars] of Object.entries(dictionary)) {
+    assert.match(reading, /^[ㄅ-ㄩ]+[ˊˇˋ˙]?$/);
+    assert.match(chars, /^\p{Script=Han}+$/u);
+    assert.equal(new Set(chars).size, [...chars].length);
+  }
+});
+
+test("readonly, disabled and non-text inputs cannot be modified", () => {
+  const { context, handlers, Input } = loadExtension();
+  for (const properties of [{ readOnly: true }, { disabled: true }, { type: "password" }, { type: "email" }, { type: "number" }]) {
+    const input = Object.assign(new Input("su3"), properties);
+    context.document.activeElement = input;
+    handlers.keydown({ ctrlKey: true, shiftKey: true, code: "KeyY", preventDefault() { assert.fail("Should ignore field"); } });
+    assert.equal(input.value, "su3");
+  }
+});
+
+test("composition, key repeats and extra modifiers do not trigger conversion", () => {
+  const { context, handlers, Input } = loadExtension();
+  const input = new Input("su3");
+  context.document.activeElement = input;
+  for (const extras of [{ isComposing: true }, { repeat: true }, { altKey: true }, { metaKey: true }]) {
+    handlers.keydown({ ctrlKey: true, shiftKey: true, code: "KeyY", ...extras,
+      preventDefault() { assert.fail("Should ignore key event"); } });
+  }
+  assert.equal(input.value, "su3");
+});
+
+test("snapshot replacement refuses changed, detached and newly readonly fields", () => {
+  const { context, Input } = loadExtension();
+  for (const properties of [{ value: "new text" }, { isConnected: false }, { readOnly: true }]) {
+    const input = new Input("su3");
+    const snapshot = context.captureInput(input);
+    Object.assign(input, properties);
+    assert.equal(context.replaceInput(input, snapshot, "你"), false);
+    assert.equal(input.value, properties.value ?? "su3");
+    assert.equal(input.events.length, 0);
+  }
 });

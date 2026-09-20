@@ -6,12 +6,14 @@ function convertToZhuyin(text) {
 
 function isSupportedInput(element) {
   return (
-    element instanceof HTMLInputElement ||
-    element instanceof HTMLTextAreaElement
+    (element instanceof HTMLTextAreaElement ||
+      (element instanceof HTMLInputElement &&
+        ["text", "search", "url", "tel"].includes(element.type))) &&
+    !element.readOnly && !element.disabled
   );
 }
 
-function recoverCurrentInput(element) {
+function captureInput(element) {
   const start = element.selectionStart ?? 0;
   const end = element.selectionEnd ?? 0;
 
@@ -28,17 +30,17 @@ function recoverCurrentInput(element) {
     replaceEnd = element.value.length;
   }
 
-  const originalText = element.value.slice(
-    replaceStart,
-    replaceEnd
-  );
+  return { value: element.value, start: replaceStart, end: replaceEnd,
+    raw: element.value.slice(replaceStart, replaceEnd) };
+}
 
-  const recovery = globalThis.TypingRecovery.parseKeystrokes(originalText);
+function replaceInput(element, snapshot, text) {
+  if (!element.isConnected || !isSupportedInput(element) || element.value !== snapshot.value) return false;
 
   element.setRangeText(
-    recovery.zhuyin,
-    replaceStart,
-    replaceEnd,
+    text,
+    snapshot.start,
+    snapshot.end,
     "end"
   );
 
@@ -49,6 +51,13 @@ function recoverCurrentInput(element) {
     })
   );
 
+  return true;
+}
+
+function recoverCurrentInput(element) {
+  const snapshot = captureInput(element);
+  const recovery = globalThis.TypingRecovery.parseKeystrokes(snapshot.raw);
+  replaceInput(element, snapshot, recovery.zhuyin);
   return recovery;
 }
 
@@ -56,9 +65,10 @@ document.addEventListener("keydown", (event) => {
   const isRecoveryShortcut =
     event.ctrlKey &&
     event.shiftKey &&
-    event.code === "KeyY";
+    !event.altKey && !event.metaKey &&
+    (event.code === "KeyY" || event.code === "KeyU");
 
-  if (!isRecoveryShortcut) {
+  if (!isRecoveryShortcut || event.isComposing || event.repeat) {
     return;
   }
 
@@ -70,5 +80,11 @@ document.addEventListener("keydown", (event) => {
 
   event.preventDefault();
 
-  recoverCurrentInput(activeElement);
+  if (event.code === "KeyY") {
+    recoverCurrentInput(activeElement);
+  } else {
+    const snapshot = captureInput(activeElement);
+    globalThis.TypingRecoveryUI.openCandidatePanel(activeElement, snapshot,
+      (text) => replaceInput(activeElement, snapshot, text));
+  }
 });
