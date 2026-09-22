@@ -12,6 +12,7 @@ from playwright.sync_api import sync_playwright, expect
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument("--screenshot", type=Path)
+parser.add_argument("--hint-screenshot", type=Path)
 args = parser.parse_args()
 
 FIXTURE = """<!doctype html><html lang="zh-Hant"><meta charset="utf-8">
@@ -157,6 +158,113 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
         assert bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= 375
         expect(panel.get_by_role("button", name="套用替換")).to_be_in_viewport()
         panel.get_by_role("button", name="取消", exact=True).click()
+
+        page.set_viewport_size({"width": 1024, "height": 900})
+        hint = page.locator("#typing-recovery-hint")
+        query.fill("su3cl3")
+        expect(hint).to_be_visible()
+        expect(hint.locator("strong")).to_have_text("你好")
+        expect(query).to_have_value("su3cl3")
+        expect(query).to_be_focused()
+        expect(panel).to_have_count(0)
+        if args.hint_screenshot:
+            page.screenshot(path=str(args.hint_screenshot), full_page=True)
+        hint.get_by_role("button", name="查看候選").click()
+        expect(hint).to_have_count(0)
+        expect(panel.locator("output")).to_have_text("你好")
+        expect(query).to_have_value("su3cl3")
+        panel.get_by_role("button", name="套用替換").click()
+        expect(query).to_have_value("你好")
+        print("PASS: passive automatic hint opens candidates without changing input")
+
+        query.fill("w96j0 ")
+        expect(hint).to_be_visible()
+        hint.get_by_role("button", name="查看候選").click()
+        panel.get_by_role("button", name="取消", exact=True).click()
+        page.wait_for_timeout(600)
+        expect(hint).to_have_count(0)
+        expect(query).to_have_value("w96j0 ")
+
+        query.fill("g4ru,4")
+        expect(hint).to_be_visible()
+        query.press("Escape")
+        expect(hint).to_have_count(0)
+        expect(query).to_have_value("g4ru,4")
+        password.focus()
+        query.focus()
+        page.wait_for_timeout(600)  # Beyond the detector's 450 ms debounce.
+        expect(hint).to_have_count(0)
+        query.fill("dl3g4")
+        expect(hint).to_be_visible()
+        hint.get_by_role("button", name="忽略", exact=True).click()
+        page.wait_for_timeout(600)
+        expect(hint).to_have_count(0)
+        expect(query).to_have_value("dl3g4")
+        print("PASS: Escape and Ignore suppress repeated hints for unchanged input")
+
+        query.fill("w961o3g45/4zj3")
+        expect(hint).to_be_visible()
+        query.evaluate("element => { element.value = 'changed'; }")
+        hint.get_by_role("button", name="查看候選").click()
+        expect(panel).to_have_count(0)
+        expect(query).to_have_value("changed")
+        query.fill("su3cl3")
+        query.fill("hello world")
+        page.wait_for_timeout(600)
+        expect(hint).to_have_count(0)
+        print("PASS: stale hint and pending detection cannot use replaced input")
+
+        for raw in ("gpt4", "1234567", "su3cl3@example.com", "su3cl", "我想su3cl3"):
+            query.fill(raw)
+            page.wait_for_timeout(600)
+            expect(hint).to_have_count(0)
+            expect(query).to_have_value(raw)
+        print("PASS: normal and deliberately unsupported input stays quiet")
+
+        query.fill("su3cl3a87")
+        query.evaluate("""element => {
+            element.dispatchEvent(new CompositionEvent('compositionstart', {bubbles:true}));
+            element.dispatchEvent(new InputEvent('input', {bubbles:true, isComposing:true}));
+        }""")
+        page.wait_for_timeout(600)
+        expect(hint).to_have_count(0)
+        query.evaluate("element => element.dispatchEvent(new CompositionEvent('compositionend', {bubbles:true}))")
+        expect(hint).to_be_visible()
+        expect(hint.locator("strong")).to_have_text("你好嗎")
+        password.focus()
+        expect(hint).to_have_count(0)
+        password.fill("su3cl3")
+        page.wait_for_timeout(600)
+        expect(hint).to_have_count(0)
+        query.focus()
+        query.evaluate("""element => {
+            element.readOnly = true;
+            element.dispatchEvent(new Event('input', {bubbles:true}));
+        }""")
+        page.wait_for_timeout(600)
+        expect(hint).to_have_count(0)
+        query.evaluate("element => { element.readOnly = false; }")
+        print("PASS: composition, focus loss, passwords and readonly fields are respected")
+
+        query.fill("2u04sl3")
+        expect(hint).to_be_visible()
+        query.press("Tab")
+        expect(password).to_be_focused()
+        expect(query).to_have_value("2u04sl3")
+        expect(panel).to_have_count(0)
+        expect(hint).to_have_count(0)
+        page.set_viewport_size({"width": 375, "height": 667})
+        query.fill("5j/ jp6")
+        expect(hint).to_be_visible()
+        bounds = hint.bounding_box()
+        assert bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= 375
+        assert bounds["y"] >= 0 and bounds["y"] + bounds["height"] <= 667
+        query.press("Control+Shift+U")
+        expect(hint).to_have_count(0)
+        expect(panel.locator("output")).to_have_text("中文")
+        panel.get_by_role("button", name="取消", exact=True).click()
+        print("PASS: Tab retains normal behavior; hints fit narrow screens and coexist with shortcuts")
+
         assert not errors, errors
         print("PASS: narrow viewport; no page errors")
         context.close()

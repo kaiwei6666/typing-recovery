@@ -20,12 +20,16 @@ function loadExtension() {
     dispatchEvent(event) { this.events.push(event); }
   }
   const handlers = {};
+  const listeners = {};
   const context = vm.createContext({
     HTMLInputElement: Input,
     HTMLTextAreaElement: class extends Input {},
     Event,
     console: { log() {} },
-    document: { activeElement: null, addEventListener(type, handler) { handlers[type] = handler; } },
+    document: { activeElement: null, addEventListener(type, handler) {
+      (listeners[type] ??= []).push(handler);
+      handlers[type] = (event) => listeners[type].forEach((listener) => listener(event));
+    } },
   });
   for (const file of manifest.content_scripts[0].js) {
     vm.runInContext(readFileSync(resolve(root, file), "utf8"), context, { filename: file });
@@ -317,4 +321,37 @@ test("dynamic programming compares overlapping phrases instead of greedily takin
   const ranked = context.TypingRecovery.rankCandidates(recovery);
   assert.equal(ranked[0].text, "你好好事");
   assert.deepEqual(Array.from(ranked[0].phrases), ["好事"]);
+});
+
+test("automatic detection follows the labeled conservative regression policy", () => {
+  const api = loadExtension().context.TypingRecovery;
+  const fixture = JSON.parse(readFileSync(resolve(root, "tests/fixtures/detector-cases.json"), "utf8"));
+  for (const entry of fixture.cases) {
+    const result = api.detectRecovery(entry.raw);
+    assert.equal(result.suggest, entry.suggest, entry.raw);
+    if (entry.text) assert.equal(result.text, entry.text, entry.raw);
+    if (entry.reason) assert.equal(result.reason, entry.reason, entry.raw);
+    if (result.suggest) {
+      assert.ok(result.evidence.syllables >= 2);
+      assert.ok(result.evidence.phraseCoverage >= 0.6);
+      assert.ok(result.evidence.scoreMargin === null || result.evidence.scoreMargin >= Math.log(1.5));
+    }
+  }
+});
+
+test("automatic detection caps work before ranking and rejects non-string input", () => {
+  const context = loadExtension().context;
+  const api = context.TypingRecovery;
+  context.TypingRecovery = { ...api, rankCandidates() { assert.fail("Should not rank oversized inputs"); } };
+  assert.equal(api.detectRecovery("su3".repeat(54)).reason, "too-long");
+  assert.equal(api.detectRecovery("su3".repeat(33)).reason, "too-long");
+  assert.throws(() => api.detectRecovery(null), /expects a string/);
+});
+
+test("automatic rejection does not remove manual recovery candidates", () => {
+  const api = loadExtension().context.TypingRecovery;
+  for (const raw of ["su3", "SU3CL3", "cl3g4"]) {
+    assert.equal(api.detectRecovery(raw).suggest, false);
+    assert.ok(api.rankCandidates(api.getCandidateRecovery(raw)).length > 0);
+  }
 });
