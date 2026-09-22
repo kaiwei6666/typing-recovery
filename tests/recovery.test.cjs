@@ -239,3 +239,82 @@ test("snapshot replacement refuses changed, detached and newly readonly fields",
     assert.equal(input.events.length, 0);
   }
 });
+
+test("phrase context selects different characters for the same shi4 reading", () => {
+  const api = loadExtension().context.TypingRecovery;
+  for (const [raw, expected] of [["g4ru,4", "世界"], ["dl3g4", "考試"],
+    ["cl3g4", "好事"], ["w961o3g45/4zj3", "台北市政府"], ["su3cl3g4ru,4", "你好世界"]]) {
+    const result = api.rankCandidates(api.getCandidateRecovery(raw));
+    assert.equal(result[0].text, expected, raw);
+    assert.ok(result[0].phrases.length > 0);
+  }
+});
+
+test("ranked suggestions are unique, ordered, bounded and selectable", () => {
+  const api = loadExtension().context.TypingRecovery;
+  for (const raw of ["su3cl3", "5j/ jp6", "g4ru,4", "su3@1m33🙂", "a87", "su3".repeat(120)]) {
+    const recovery = api.getCandidateRecovery(raw);
+    const ranked = api.rankCandidates(recovery);
+    assert.ok(ranked.length > 0 && ranked.length <= 5);
+    assert.equal(new Set(ranked.map((r) => r.text)).size, ranked.length);
+    ranked.forEach((suggestion, index) => {
+      assert.equal(suggestion.choices.length, recovery.units.length);
+      assert.equal(api.composeCandidates(recovery, suggestion.choices), suggestion.text);
+      assert.ok(Number.isFinite(suggestion.score));
+      if (index) assert.ok(ranked[index - 1].score >= suggestion.score);
+    });
+  }
+  assert.equal(api.rankCandidates(api.getCandidateRecovery("su3".repeat(121))).length, 0);
+});
+
+test("phrases cross only first-tone delimiters, not literal boundaries", () => {
+  const api = loadExtension().context.TypingRecovery;
+  assert.ok(api.rankCandidates(api.getCandidateRecovery("5j/ jp6"))[0].phrases.includes("中文"));
+  for (const raw of ["su3 cl3", "su3@cl3", "su3\ncl3", "su3🙂cl3", "su33cl3", "5j/  jp6"]) {
+    const recovery = api.getCandidateRecovery(raw);
+    const ranked = api.rankCandidates(recovery);
+    assert.ok(ranked.every((suggestion) => suggestion.phrases.length === 0), raw);
+    for (const suggestion of ranked) {
+      const gap = raw.slice(recovery.units[0].end, recovery.units[1].start);
+      assert.ok(api.composeCandidates(recovery, suggestion.choices, true).includes(gap), raw);
+    }
+  }
+});
+
+test("ranking never fabricates readings for missing or unsupported input", () => {
+  const api = loadExtension().context.TypingRecovery;
+  for (const raw of ["", "中文🙂", "su", "s3", "1m3", "3"]) {
+    assert.equal(api.rankCandidates(api.getCandidateRecovery(raw)).length, 0, raw);
+  }
+  const mixed = api.rankCandidates(api.getCandidateRecovery("su3@1m33🙂"));
+  assert.equal(mixed[0].text, "你@1m33🙂");
+});
+
+test("all generated phrases respect the existing dictionary and frequency order", () => {
+  const context = loadExtension().context;
+  assert.ok(Object.keys(context.ZHUYIN_PHRASES).length > 90000);
+  for (const [reading, entries] of Object.entries(context.ZHUYIN_PHRASES)) {
+    const readings = reading.split("-");
+    assert.ok(readings.length >= 2 && readings.length <= 6);
+    assert.equal(new Set(entries.map(([word]) => word)).size, entries.length);
+    entries.forEach(([word, count], index) => {
+      const chars = [...word];
+      assert.equal(chars.length, readings.length);
+      chars.forEach((char, i) => assert.ok(context.ZHUYIN_DICTIONARY[readings[i]].includes(char)));
+      assert.ok(Number.isSafeInteger(count) && count > 0);
+      if (index) assert.ok(entries[index - 1][1] >= count);
+    });
+  }
+});
+
+test("dynamic programming compares overlapping phrases instead of greedily taking the longest", () => {
+  const context = loadExtension().context;
+  // Deliberately make 好事 much more frequent than the overlapping 你好好 phrase.
+  context.ZHUYIN_PHRASES = { "ㄋㄧˇ-ㄏㄠˇ-ㄏㄠˇ": [["你好好", 1]], "ㄏㄠˇ-ㄕˋ": [["好事", 900000]] };
+  context.ZHUYIN_CHARACTER_COUNTS = { "你": 500000, "好": 500000, "事": 1, "是": 1 };
+  context.ZHUYIN_FREQUENCY_TOTAL = 2000000;
+  const recovery = context.TypingRecovery.getCandidateRecovery("su3cl3cl3g4");
+  const ranked = context.TypingRecovery.rankCandidates(recovery);
+  assert.equal(ranked[0].text, "你好好事");
+  assert.deepEqual(Array.from(ranked[0].phrases), ["好事"]);
+});

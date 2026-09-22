@@ -25,11 +25,17 @@
       select { width: 100%; padding: 8px; font: inherit; color: #172033;
         background: white; border: 1px solid #94a3b8; border-radius: 6px; }
       .option { display: block; margin: 16px 0; }
-      .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+      .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;
+        position: sticky; bottom: -24px; padding: 14px 0; background: white;
+        border-top: 1px solid #e2e8f0; }
       button { font: inherit; padding: 8px 18px; border-radius: 8px;
         border: 1px solid #94a3b8; background: white; color: #172033; cursor: pointer; }
       button.primary { background: #4338ca; border-color: #4338ca; color: white; }
       button:disabled { opacity: .45; cursor: default; }
+      .suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+      .suggestions button { max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+      .suggestions button[aria-pressed="true"] { border-color: #4338ca; background: #eef2ff; color: #312e81; }
+      .phrase-note { margin-bottom: 12px; }
       :focus-visible { outline: 3px solid #818cf8; outline-offset: 3px; }
       .status { color: #9a3412; }
       small { color: #64748b; display: block; }
@@ -45,13 +51,40 @@
       return node;
     }
     make("h2", "選擇中文字").id = "candidate-title";
-    make("p", "依音節選字，確認預覽後再替換。候選依字典順序排列，尚未根據上下文選字。").id = "candidate-help";
+    make("p", "先選擇建議組合，也可逐字調整。建議依離線詞庫與詞頻排序，請確認預覽後再替換。").id = "candidate-help";
     make("div", snapshot.raw, dialog, "source").setAttribute("aria-label", "原始文字");
     const status = make("p", "", dialog, "status");
     status.setAttribute("role", "status");
     const recovery = globalThis.TypingRecovery.getCandidateRecovery(snapshot.raw);
-    const choices = recovery.units.map((unit) => unit.candidates[0] ?? "");
     const tooLong = recovery.units.length > 120;
+    const suggestions = tooLong ? [] : globalThis.TypingRecovery.rankCandidates(recovery);
+    const originalChoices = recovery.units.map((unit) => unit.candidates[0] ?? "");
+    const choices = [...(suggestions[0]?.choices ?? originalChoices)];
+    const selects = [];
+    const suggestionButtons = [];
+    let phraseNote;
+    if (suggestions.length) {
+      make("strong", "建議組合");
+      const group = make("div", undefined, dialog, "suggestions");
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", "建議組合");
+      for (const suggestion of suggestions) {
+        const button = make("button", suggestion.text, group);
+        button.type = "button";
+        button.addEventListener("click", () => choose(suggestion.choices));
+        suggestionButtons.push(button);
+      }
+      phraseNote = make("small", "", dialog, "phrase-note");
+      const reset = make("button", "恢復逐字預設", dialog);
+      reset.type = "button";
+      reset.addEventListener("click", () => choose(originalChoices));
+    }
+
+    function choose(nextChoices) {
+      choices.splice(0, choices.length, ...nextChoices);
+      selects.forEach((select, index) => { select.value = choices[index]; });
+      updatePreview();
+    }
     const reasons = {
       "missing-tone": "缺少聲調；一聲請加半形空白",
       "incomplete-body": "音節尚未完整",
@@ -71,6 +104,7 @@
           make("option", candidate, select).value = candidate;
         }
         select.value = choices[index];
+        selects.push(select);
         select.addEventListener("change", () => {
           choices[index] = select.value;
           updatePreview();
@@ -95,6 +129,18 @@
     function updatePreview() {
       preview.textContent = tooLong ? snapshot.raw : globalThis.TypingRecovery.composeCandidates(recovery, choices, preserveSpaces.checked);
       accept.disabled = stale || tooLong || preview.textContent === snapshot.raw;
+      let selected = null;
+      suggestions.forEach((suggestion, index) => {
+        const matches = suggestion.choices.every((choice, i) => choice === choices[i]);
+        suggestionButtons[index].setAttribute("aria-pressed", String(matches));
+        suggestionButtons[index].textContent = globalThis.TypingRecovery.composeCandidates(recovery, suggestion.choices, preserveSpaces.checked);
+        if (matches) selected = suggestion;
+      });
+      if (phraseNote) {
+        phraseNote.textContent = selected?.phrases.length
+          ? `參考詞彙：${selected.phrases.join("、")}`
+          : selected ? "依單字詞頻組合，請確認是否符合原意。" : "已逐字調整，保留你的選擇。";
+      }
     }
     function markStale() {
       if (element.value !== snapshot.value) {
