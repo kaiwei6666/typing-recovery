@@ -355,3 +355,64 @@ test("automatic rejection does not remove manual recovery candidates", () => {
     assert.ok(api.rankCandidates(api.getCandidateRecovery(raw)).length > 0);
   }
 });
+
+
+test("mixed ranges preserve context and use UTF-16 offsets", () => {
+  const api = loadExtension().context.TypingRecovery;
+  for (const [value, raw, text] of [
+    ["我想用 Google 查 su3cl3 的意思", "su3cl3", "你好"],
+    ["前🙂su3cl3後", "su3cl3", "你好"],
+    ["hello su3cl3 world", "su3cl3", "你好"],
+    ["中文 5j/ jp6 測試", "5j/ jp6", "中文"],
+    ["查 w96j0 的天氣", "w96j0 ", "台灣"],
+  ]) {
+    const ranges = api.findRecoveryRanges(value);
+    assert.equal(ranges.length, 1, value);
+    assert.equal(ranges[0].raw, raw);
+    assert.equal(ranges[0].start, value.indexOf(raw));
+    assert.equal(ranges[0].end, value.indexOf(raw) + raw.length);
+    assert.equal(ranges[0].text, text);
+  }
+});
+
+test("range detection protects whole identifiers, links, email, paths and code", () => {
+  const api = loadExtension().context.TypingRecovery;
+  for (const value of ["https://example.com/你好su3cl3", "su3cl3@example.com",
+    "x=su3cl3", "user_su3cl3", "hellosu3cl3", "SU3CL3", "src/su3cl3",
+    "`su3cl3`", "`su3cl3", "/你好su3cl3", "www.example.com/你好su3cl3",
+    "su3@1m33🙂", "我想su3cl"]) {
+    assert.equal(api.findRecoveryRanges(value).length, 0, value);
+  }
+  const ranges = api.findRecoveryRanges("https://example.com/你好su3cl3，su3cl3");
+  assert.equal(ranges.length, 1);
+  assert.equal(ranges[0].start, 29);
+});
+
+test("range detection returns ordered ranges and refuses partial scans at limits", () => {
+  const api = loadExtension().context.TypingRecovery;
+  const ranges = api.findRecoveryRanges("su3cl3、g4ru,4");
+  assert.deepEqual(Array.from(ranges, r => [r.start, r.end, r.text]), [[0, 6, "你好"], [7, 13, "世界"]]);
+  assert.equal(api.findRecoveryRanges("中".repeat(2000) + "su3cl3").length, 0);
+  assert.equal(api.findRecoveryRanges("a、".repeat(128) + "su3cl3").length, 0);
+  assert.equal(api.findRecoveryRanges(Array(9).fill("su3cl3").join("、")).length, 0);
+  assert.throws(() => api.findRecoveryRanges(null), /expects a string/);
+});
+
+test("manual capture picks last range, honors selection, and replacement checks all context", () => {
+  const {context, Input} = loadExtension();
+  const input = new Input("前🙂su3cl3、g4ru,4後");
+  const snapshot = context.captureRecoveryInput(input);
+  assert.equal(snapshot.raw, "g4ru,4");
+  assert.equal(context.replaceInput(input, snapshot, "世界"), true);
+  assert.equal(input.value, "前🙂su3cl3、世界後");
+  assert.equal(input.selectionStart, 12);
+  assert.equal(input.events.length, 1);
+  input.selectionStart = 3;
+  input.selectionEnd = 6;
+  assert.equal(context.captureRecoveryInput(input).raw, "su3");
+  input.selectionEnd = 3;
+  const stale = context.captureRecoveryInput(input);
+  input.value = "新" + input.value;
+  assert.equal(context.replaceInput(input, stale, "你好"), false);
+  assert.equal(input.events.length, 1);
+});

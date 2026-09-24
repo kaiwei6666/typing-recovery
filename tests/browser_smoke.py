@@ -214,7 +214,7 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
         expect(hint).to_have_count(0)
         print("PASS: stale hint and pending detection cannot use replaced input")
 
-        for raw in ("gpt4", "1234567", "su3cl3@example.com", "su3cl", "我想su3cl3"):
+        for raw in ("gpt4", "1234567", "su3cl3@example.com", "su3cl", "我想su3cl"):
             query.fill(raw)
             page.wait_for_timeout(600)
             expect(hint).to_have_count(0)
@@ -313,6 +313,40 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
         expect(panel.locator("output")).to_have_text("中文")
         panel.get_by_role("button", name="取消", exact=True).click()
         print("PASS: hints fit narrow screens and coexist with manual shortcuts")
+
+        mixed = "我想用 Google 查 su3cl3 的意思"
+        query.fill(mixed)
+        expect(hint).to_be_visible()
+        expect(hint.locator("strong")).to_have_text("你好")
+        expect(hint).to_contain_text("su3cl3")
+        if args.hint_screenshot:
+            page.screenshot(path=str(args.hint_screenshot), full_page=True)
+        before = page.evaluate("window.inputEvents")
+        query.press("Tab")
+        expect(query).to_have_value("我想用 Google 查 你好 的意思")
+        assert query.evaluate("e => e.selectionStart") == 15
+        assert page.evaluate("window.inputEvents") == before + 1
+
+        query.fill("前🙂su3cl3後")
+        expect(hint).to_be_visible()
+        hint.get_by_role("button", name="查看候選").click()
+        expect(panel.locator("output")).to_have_text("你好")
+        panel.get_by_role("button", name="套用替換").click()
+        expect(query).to_have_value("前🙂你好後")
+        assert query.evaluate("e => e.selectionStart") == 5
+
+        open_candidates("su3cl3、g4ru,4")
+        expect(panel.locator("output")).to_have_text("世界")
+        panel.get_by_role("button", name="套用替換").click()
+        expect(query).to_have_value("su3cl3、世界")
+
+        query.fill(mixed)
+        expect(hint).to_be_visible()
+        query.evaluate("e => { e.value = '新' + e.value; }")
+        query.press("Tab")
+        expect(query).to_have_value("新" + mixed)
+        expect(password).to_be_focused()
+        print("PASS: mixed range Tab, candidates, UTF-16 caret, last range and changed-context protection")
 
         assert not errors, errors
         print("PASS: narrow viewport; no page errors")

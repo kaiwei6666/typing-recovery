@@ -54,6 +54,14 @@ function replaceInput(element, snapshot, text) {
   return true;
 }
 
+function captureRecoveryInput(element) {
+  const snapshot = captureInput(element);
+  if (element.selectionStart !== element.selectionEnd) return snapshot;
+  const ranges = globalThis.TypingRecovery.findRecoveryRanges(element.value);
+  const range = ranges.at(-1);
+  return range ? { value: element.value, start: range.start, end: range.end, raw: range.raw } : snapshot;
+}
+
 function recoverCurrentInput(element) {
   const snapshot = captureInput(element);
   const recovery = globalThis.TypingRecovery.parseKeystrokes(snapshot.raw);
@@ -83,7 +91,7 @@ document.addEventListener("keydown", (event) => {
   if (event.code === "KeyY") {
     recoverCurrentInput(activeElement);
   } else {
-    const snapshot = captureInput(activeElement);
+    const snapshot = captureRecoveryInput(activeElement);
     globalThis.TypingRecoveryUI.openCandidatePanel(activeElement, snapshot,
       (text) => replaceInput(activeElement, snapshot, text));
   }

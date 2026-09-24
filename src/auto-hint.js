@@ -15,7 +15,7 @@
 
   function acceptHint() {
     if (!current) return false;
-    const { element, value, host, text } = current;
+    const { element, value, host, text, snapshot } = current;
     const valid = element.isConnected && host.isConnected && supported(element) &&
       !document.hidden && !composing.has(element) && element.value === value && caretAtEnd(element) &&
       (document.activeElement === element || document.activeElement === host) &&
@@ -23,7 +23,7 @@
     hide();
     if (!valid) return false;
     element.focus();
-    return replaceInput(element, { value, raw: value, start: 0, end: value.length }, text);
+    return replaceInput(element, snapshot, text);
   }
 
   function hide() {
@@ -54,6 +54,7 @@
   }
 
   function show(element, value, detection) {
+    const snapshot = { value, raw: detection.raw, start: detection.start, end: detection.end };
     const host = document.createElement("div");
     host.id = "typing-recovery-hint";
     // Inline important positioning prevents host-page rules from moving the hint.
@@ -78,7 +79,7 @@
     section.setAttribute("aria-label", "輸入法修復提示");
     const message = document.createElement("p");
     message.setAttribute("role", "status");
-    message.append(document.createTextNode("可能忘記切換輸入法，想輸入「"));
+    message.append(document.createTextNode(`將「${detection.raw}」修復為「`));
     const text = document.createElement("strong");
     text.textContent = detection.text;
     message.append(text, document.createTextNode("」？"));
@@ -105,7 +106,6 @@
       hide();
       if (!element.isConnected || !supported(element) || element.value !== value || composing.has(element)) return;
       ignored.set(element, value); // Do not repeat the same hint after canceling the review.
-      const snapshot = { value, raw: value, start: 0, end: value.length };
       element.focus();
       globalThis.TypingRecoveryUI.openCandidatePanel(element, snapshot,
         (replacement) => replaceInput(element, snapshot, replacement));
@@ -115,7 +115,7 @@
       hide();
       if (element.isConnected) element.focus();
     });
-    current = { element, value, host, text: detection.text };
+    current = { element, value, host, text: detection.text, snapshot };
     document.documentElement.append(host);
     position();
     if (current) {
@@ -126,7 +126,7 @@
 
   function schedule(element) {
     hide();
-    if (!supported(element) || composing.has(element) || !caretAtEnd(element) || element.value.length > 160) return;
+    if (!supported(element) || composing.has(element) || !caretAtEnd(element) || element.value.length > 2000) return;
     const value = element.value;
     if (ignored.get(element) === value) return;
     timer = setTimeout(() => {
@@ -134,8 +134,8 @@
       if (!element.isConnected || !supported(element) || composing.has(element) ||
         document.activeElement !== element || element.value !== value || !caretAtEnd(element) ||
         document.querySelector("#typing-recovery-panel")) return;
-      const detection = globalThis.TypingRecovery.detectRecovery(value);
-      if (detection.suggest) show(element, value, detection);
+      const detection = globalThis.TypingRecovery.findRecoveryRanges(value).at(-1);
+      if (detection) show(element, value, detection);
     }, 450);
   }
 
