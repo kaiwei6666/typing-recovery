@@ -9,6 +9,23 @@
       (element instanceof HTMLTextAreaElement || ["text", "search"].includes(element.type));
   }
 
+  function caretAtEnd(element) {
+    return element.selectionStart === element.value.length && element.selectionEnd === element.value.length;
+  }
+
+  function acceptHint() {
+    if (!current) return false;
+    const { element, value, host, text } = current;
+    const valid = element.isConnected && host.isConnected && supported(element) &&
+      !document.hidden && !composing.has(element) && element.value === value && caretAtEnd(element) &&
+      (document.activeElement === element || document.activeElement === host) &&
+      !document.querySelector("#typing-recovery-panel");
+    hide();
+    if (!valid) return false;
+    element.focus();
+    return replaceInput(element, { value, raw: value, start: 0, end: value.length }, text);
+  }
+
   function hide() {
     if (timer !== null) { clearTimeout(timer); timer = null; }
     if (!current) return;
@@ -51,7 +68,7 @@
         border-radius: 12px; background: #fff; color: #172033; box-shadow: 0 8px 24px #0f172a26;
         font: 14px/1.5 system-ui, sans-serif; overflow-wrap: anywhere; }
       p { margin: 0 0 8px; } strong { color: #3730a3; }
-      .actions { display: flex; gap: 8px; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
       button { padding: 6px 12px; border-radius: 6px; border: 1px solid #94a3b8;
         color: #172033; background: white; font: inherit; cursor: pointer; }
       .primary { background: #4338ca; color: white; border-color: #4338ca; }
@@ -69,12 +86,17 @@
     actions.className = "actions";
     const view = document.createElement("button");
     view.type = "button";
-    view.className = "primary";
     view.textContent = "查看候選";
+    const accept = document.createElement("button");
+    accept.type = "button";
+    accept.className = "primary";
+    accept.textContent = "套用（Tab）";
+    accept.setAttribute("aria-keyshortcuts", "Tab");
+    accept.addEventListener("click", acceptHint);
     const dismiss = document.createElement("button");
     dismiss.type = "button";
     dismiss.textContent = "忽略";
-    actions.append(view, dismiss);
+    actions.append(accept, view, dismiss);
     section.append(message, actions);
     shadow.append(style, section);
     // Mouse use should not move focus out of the user's input before the click.
@@ -93,7 +115,7 @@
       hide();
       if (element.isConnected) element.focus();
     });
-    current = { element, value, host };
+    current = { element, value, host, text: detection.text };
     document.documentElement.append(host);
     position();
     if (current) {
@@ -104,13 +126,13 @@
 
   function schedule(element) {
     hide();
-    if (!supported(element) || composing.has(element) || element.value.length > 160) return;
+    if (!supported(element) || composing.has(element) || !caretAtEnd(element) || element.value.length > 160) return;
     const value = element.value;
     if (ignored.get(element) === value) return;
     timer = setTimeout(() => {
       timer = null;
       if (!element.isConnected || !supported(element) || composing.has(element) ||
-        document.activeElement !== element || element.value !== value ||
+        document.activeElement !== element || element.value !== value || !caretAtEnd(element) ||
         document.querySelector("#typing-recovery-panel")) return;
       const detection = globalThis.TypingRecovery.detectRecovery(value);
       if (detection.suggest) show(element, value, detection);
@@ -132,7 +154,16 @@
   document.addEventListener("compositionstart", (event) => { composing.add(event.target); hide(); });
   document.addEventListener("compositionend", (event) => { composing.delete(event.target); schedule(event.target); });
   document.addEventListener("keydown", (event) => {
-    if (current && event.key === "Escape") {
+    if (current && event.key === "Tab") {
+      if (event.defaultPrevented || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey ||
+        event.repeat || event.isComposing || event.keyCode === 229 || document.activeElement !== current.element) {
+        return;
+      }
+      if (acceptHint()) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    } else if (current && event.key === "Escape") {
       const element = current.element;
       ignored.set(current.element, current.value);
       hide();
@@ -140,5 +171,8 @@
       event.preventDefault();
     } else if (event.ctrlKey && event.shiftKey && ["KeyY", "KeyU"].includes(event.code)) hide();
   }, true);
+  document.addEventListener("selectionchange", () => {
+    if (current && !caretAtEnd(current.element)) hide();
+  });
   document.addEventListener("visibilitychange", () => { if (document.hidden) hide(); });
 })();

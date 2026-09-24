@@ -248,11 +248,60 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
 
         query.fill("2u04sl3")
         expect(hint).to_be_visible()
+        events_before = page.evaluate("window.inputEvents")
         query.press("Tab")
-        expect(password).to_be_focused()
-        expect(query).to_have_value("2u04sl3")
+        expect(query).to_be_focused()
+        expect(query).to_have_value("電腦")
+        assert query.evaluate("element => element.selectionStart") == 2
+        assert page.evaluate("window.inputEvents") == events_before + 1
         expect(panel).to_have_count(0)
         expect(hint).to_have_count(0)
+        query.press("Tab")
+        expect(password).to_be_focused()
+        print("PASS: Tab accepts once, preserves focus/caret, then resumes normal navigation")
+
+        query.fill("su3cl3")
+        expect(hint).to_be_visible()
+        hint.get_by_role("button", name="套用（Tab）", exact=True).click()
+        expect(query).to_have_value("你好")
+        expect(query).to_be_focused()
+        query.fill("5j/ jp6")
+        expect(hint).to_be_visible()
+        query.press("Shift+Tab")
+        expect(query).to_have_value("5j/ jp6")
+        query.fill("su3cl3")
+        expect(hint).to_be_visible()
+        query.evaluate("element => element.setSelectionRange(0, 3)")
+        expect(hint).to_have_count(0)
+        query.press("Tab")
+        expect(query).to_have_value("su3cl3")
+        expect(password).to_be_focused()
+        print("PASS: click acceptance works; Shift+Tab and selections are not replaced")
+
+        for changes in ("element.value = 'changed'", "element.readOnly = true"):
+            query.fill("su3cl3")
+            expect(hint).to_be_visible()
+            query.evaluate(f"element => {{ {changes}; }}")
+            query.press("Tab")
+            expect(query).to_have_value("changed" if "value" in changes else "su3cl3")
+            expect(password).to_be_focused()
+            expect(hint).to_have_count(0)
+            query.evaluate("element => { element.readOnly = false; }")
+        print("PASS: stale and newly readonly hints do not intercept Tab")
+
+        query.fill("su3cl3")
+        expect(hint).to_be_visible()
+        for properties in ({"ctrlKey": True}, {"altKey": True}, {"metaKey": True}, {"repeat": True}, {"isComposing": True}):
+            canceled = query.evaluate("""(element, properties) => !element.dispatchEvent(
+                new KeyboardEvent('keydown', {key:'Tab', code:'Tab', bubbles:true, cancelable:true, ...properties}))""", properties)
+            assert not canceled
+            expect(query).to_have_value("su3cl3")
+        query.press("Escape")
+        query.press("Tab")
+        expect(password).to_be_focused()
+        expect(query).to_have_value("su3cl3")
+        print("PASS: modifiers, repeats, IME key events and dismissed hints never accept")
+
         page.set_viewport_size({"width": 375, "height": 667})
         query.fill("5j/ jp6")
         expect(hint).to_be_visible()
@@ -263,7 +312,7 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
         expect(hint).to_have_count(0)
         expect(panel.locator("output")).to_have_text("中文")
         panel.get_by_role("button", name="取消", exact=True).click()
-        print("PASS: Tab retains normal behavior; hints fit narrow screens and coexist with shortcuts")
+        print("PASS: hints fit narrow screens and coexist with manual shortcuts")
 
         assert not errors, errors
         print("PASS: narrow viewport; no page errors")
