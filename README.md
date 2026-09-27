@@ -168,12 +168,22 @@ node --test tests/recovery.test.cjs
 選用的瀏覽器整合測試需 Python 與 Playwright：
 
 ```sh
-python -m pip install playwright
+python -m pip install -r tests/requirements.txt
 python -m playwright install chromium
 python tests/browser_smoke.py
 ```
 
 這會在全新的無頭 Chromium 設定檔載入真正的擴充功能，將 Google 網址攔截為本機測試頁，驗證詞彙建議、逐字覆寫及重設、取消、局部替換、游標、空白、過期輸入保護、自動提示、Tab／點擊接受、反白與修飾鍵保護、忽略、組字事件與窄視窗。它不使用你的 Chrome 設定檔，也不依賴 Google 現行版面；Google 真實搜尋框與系統輸入法仍需手動驗收。
+
+## GitHub 自動測試
+
+[Tests 工作流程](https://github.com/kaiwei6666/typing-recovery/actions/workflows/tests.yml) 在推送到 main、提出或更新以 main 為目標的 PR 時自動執行，也可從 Actions 手動啟動。
+
+- Node.js 22 與 24：核心測試、整段偵測評估及混合區段評估。
+- Chromium：載入真正的擴充功能，執行候選、Tab、局部替換與輸入保護整合測試。
+- Playwright 版本固定於 `tests/requirements.txt`；瀏覽器依賴依照 [Playwright 官方 CI 說明](https://playwright.dev/python/docs/ci) 安裝。
+
+測試失敗時可在 Actions 查看失敗步驟與日誌。工作流程只有讀取程式碼權限，不會自動發佈版本；是否要求測試通過才能合併，需另由 repository 的分支規則設定。
 
 ## 試用回報與混合文字評估
 
