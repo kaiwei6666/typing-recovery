@@ -416,3 +416,20 @@ test("manual capture picks last range, honors selection, and replacement checks 
   assert.equal(context.replaceInput(input, stale, "你好"), false);
   assert.equal(input.events.length, 1);
 });
+
+
+test("mixed-text fixture checks every range, replacement and untouched context", () => {
+  const { context, Input } = loadExtension();
+  const fixture = JSON.parse(readFileSync(resolve(root, "tests/fixtures/range-cases.json"), "utf8"));
+  for (const entry of fixture.cases) {
+    const ranges = context.TypingRecovery.findRecoveryRanges(entry.raw);
+    assert.deepEqual(Array.from(ranges, ({start, end, text}) => ({start, end, text})), entry.ranges, entry.raw);
+    for (const range of ranges) {
+      assert.equal(range.raw, entry.raw.slice(range.start, range.end));
+      const input = new Input(entry.raw);
+      assert.equal(context.replaceInput(input, {value: entry.raw, ...range}, range.text), true);
+      assert.equal(input.value, entry.raw.slice(0, range.start) + range.text + entry.raw.slice(range.end));
+      assert.equal(input.selectionStart, range.start + range.text.length);
+    }
+  }
+});

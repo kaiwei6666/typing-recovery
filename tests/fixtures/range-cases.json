@@ -1,0 +1,198 @@
+{
+  "description": "Hand-authored mixed-text policy cases, not user data or an accuracy benchmark. Offsets use UTF-16. Empty expected ranges may be deliberate conservative misses.",
+  "cases": [
+    {
+      "raw": "我想用 Google 查 su3cl3 的意思",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 13,
+          "end": 19,
+          "text": "你好"
+        }
+      ]
+    },
+    {
+      "raw": "前🙂su3cl3後",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 3,
+          "end": 9,
+          "text": "你好"
+        }
+      ]
+    },
+    {
+      "raw": "hello su3cl3 world",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 6,
+          "end": 12,
+          "text": "你好"
+        }
+      ]
+    },
+    {
+      "raw": "中文 5j/ jp6 測試",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 3,
+          "end": 10,
+          "text": "中文"
+        }
+      ]
+    },
+    {
+      "raw": "查 w96j0 的天氣",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 2,
+          "end": 8,
+          "text": "台灣"
+        }
+      ]
+    },
+    {
+      "raw": "我想su3cl3",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 2,
+          "end": 8,
+          "text": "你好"
+        }
+      ]
+    },
+    {
+      "raw": "https://example.com/你好su3cl3，su3cl3",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 29,
+          "end": 35,
+          "text": "你好"
+        }
+      ]
+    },
+    {
+      "raw": "su3cl3、g4ru,4",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 0,
+          "end": 6,
+          "text": "你好"
+        },
+        {
+          "start": 7,
+          "end": 13,
+          "text": "世界"
+        }
+      ]
+    },
+    {
+      "raw": "我想su3cl",
+      "intent": "mistyped",
+      "ranges": []
+    },
+    {
+      "raw": "請查 SU3CL3",
+      "intent": "mistyped",
+      "ranges": []
+    },
+    {
+      "raw": "打 su3",
+      "intent": "mistyped",
+      "ranges": []
+    },
+    {
+      "raw": "想說 cl3g4",
+      "intent": "mistyped",
+      "ranges": []
+    },
+    {
+      "raw": "hello world",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "Google 搜尋 gpt4",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "https://example.com/你好su3cl3",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "su3cl3@example.com",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "x=su3cl3",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "user_su3cl3",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "hellosu3cl3",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "src/su3cl3",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "`su3cl3`",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "`su3cl3",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "/你好su3cl3",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "www.example.com/你好su3cl3",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "C:\\資料\\su3cl3",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "1234567",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "中文🙂沒有誤打",
+      "intent": "normal",
+      "ranges": []
+    },
+    {
+      "raw": "請查 RTX 5090",
+      "intent": "normal",
+      "ranges": []
+    }
+  ]
+}
