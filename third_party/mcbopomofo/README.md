@@ -31,8 +31,10 @@ The upstream [data README](https://github.com/openvanilla/McBopomofo/blob/f5ba01
 
 Transformation: retain phrases of 2–6 Han characters with positive observed frequency and exactly one supplied reading per character; each character/reading pair must exist in our bundled character dictionary. Deduplicate each phrase per reading sequence. Sort alternatives by descending occurrence count and then text for deterministic builds. The output has 95,341 reading sequences and 103,980 phrase/reading entries. Individual-character occurrence counts are included for fallback ranking. These are corpus counts, not measurements of our users or calibrated correction confidence.
 
+`src/core/context.js` is derived from the generated phrase entries. Each distinct word contributes its occurrence count once to every adjacent Han-character pair; pairs totaling fewer than five occurrences are omitted as weak evidence. Run `node scripts/build-context.cjs` to rebuild it from the bundled phrase file. The context counts retain the same upstream provenance and license notices and contain no user input.
+
 ```sh
 node scripts/build-phrases.cjs /path/to/BPMFMappings.txt /path/to/phrase.occ
 ```
 
-Both hashes are verified before generating the bundled file (approximately 4.8 MB). The original input files are not needed when running the extension. We do not use the upstream IME decoder; the bounded phrase ranker is implemented in this project.
+Both hashes are verified before generating the bundled phrase file (approximately 4.8 MB) and its context file (approximately 0.7 MB). The phrase build invokes the context build automatically. The original input files are not needed when running the extension. We do not use the upstream IME decoder; the bounded phrase ranker is implemented in this project.
