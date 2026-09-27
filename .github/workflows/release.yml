@@ -52,4 +52,3 @@ jobs:
             --fail-on-no-commits \
             --notes "下載 typing-recovery ZIP 並解壓縮，再到 chrome://extensions/ 啟用開發人員模式並載入未封裝項目。完整操作與限制請見 README。" \
             --generate-notes ${prerelease}
-
