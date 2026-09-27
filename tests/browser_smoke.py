@@ -77,6 +77,16 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
         assert query.evaluate("element => element.selectionStart") == 5
         print("PASS: selected range preserves surrounding Unicode text and cursor")
 
+        query.fill("cl3g4場")
+        query.evaluate("element => element.setSelectionRange(0, 5)")
+        query.press("Control+Shift+U")
+        expect(panel.locator("output")).to_have_text("好市")
+        expect(panel.locator(".phrase-note")).to_contain_text("相鄰文字：市場")
+        panel.get_by_role("button", name="套用替換").click()
+        expect(query).to_have_value("好市場")
+        assert query.evaluate("element => element.selectionStart") == 2
+        print("PASS: adjacent Han context reranks a selected ambiguous range")
+
         open_candidates("5j/ jp6")
         expect(panel.locator("output")).to_have_text("中文")
         panel.get_by_role("checkbox").check()

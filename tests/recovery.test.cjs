@@ -254,6 +254,29 @@ test("phrase context selects different characters for the same shi4 reading", ()
   }
 });
 
+test("adjacent Han context reranks candidates without changing context-free order", () => {
+  const api = loadExtension().context.TypingRecovery;
+  const recovery = api.getCandidateRecovery("cl3g4");
+  const baseline = api.rankCandidates(recovery);
+  const contextual = api.rankCandidates(recovery, { right: "場" });
+  assert.equal(baseline[0].text, "好事");
+  assert.equal(contextual[0].text, "好市");
+  assert.deepEqual(Array.from(contextual[0].contextPairs), ["市場"]);
+  assert.ok(contextual[0].contextScore > 0);
+  assert.ok(contextual[0].baseScore < baseline[0].baseScore);
+  assert.equal(api.detectRecovery("cl3g4").reason, "ambiguous-candidate");
+  assert.equal(api.findRecoveryRanges("這個cl3g4場").length, 0);
+});
+
+test("ranking context uses only immediately adjacent Han characters", () => {
+  const api = loadExtension().context.TypingRecovery;
+  assert.deepEqual({ ...api.getRankingContext("前cl3g4場", 1, 6) }, { left: "前", right: "場" });
+  assert.deepEqual({ ...api.getRankingContext("前🙂cl3g4場", 3, 8) }, { left: "", right: "場" });
+  assert.deepEqual({ ...api.getRankingContext("前 cl3g4 場", 2, 7) }, { left: "", right: "" });
+  assert.throws(() => api.getRankingContext("文字", -1, 1), /valid UTF-16 range/);
+  assert.throws(() => api.getRankingContext(null, 0, 0), /valid UTF-16 range/);
+});
+
 test("ranked suggestions are unique, ordered, bounded and selectable", () => {
   const api = loadExtension().context.TypingRecovery;
   for (const raw of ["su3cl3", "5j/ jp6", "g4ru,4", "su3@1m33🙂", "a87", "su3".repeat(120)]) {
@@ -309,6 +332,17 @@ test("all generated phrases respect the existing dictionary and frequency order"
       if (index) assert.ok(entries[index - 1][1] >= count);
     });
   }
+});
+
+test("generated adjacent-Han context counts are bounded corpus evidence", () => {
+  const counts = loadExtension().context.ZHUYIN_CONTEXT_COUNTS;
+  assert.ok(Object.keys(counts).length > 50000);
+  for (const [pair, count] of Object.entries(counts)) {
+    assert.equal([...pair].length, 2);
+    assert.match(pair, /^\p{Script=Han}{2}$/u);
+    assert.ok(Number.isSafeInteger(count) && count >= 5);
+  }
+  assert.ok(counts["市場"] > (counts["事場"] ?? 0));
 });
 
 test("dynamic programming compares overlapping phrases instead of greedily taking the longest", () => {

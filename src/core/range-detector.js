@@ -73,6 +73,18 @@
         }
         if (detection.suggest) {
           const candidate = { ...detection, start: first.start, end, raw: value.slice(first.start, end) };
+          const recovery = globalThis.TypingRecovery.getCandidateRecovery(candidate.raw);
+          const context = globalThis.TypingRecovery.getRankingContext(value, candidate.start, candidate.end);
+          // Context may reorder an accepted suggestion, but automatic hints keep
+          // at least the same internal phrase coverage that passed detection.
+          const contextual = globalThis.TypingRecovery.rankCandidates(recovery, context).find((suggestion) => {
+            const covered = suggestion.phrases.reduce((sum, phrase) => sum + [...phrase].length, 0);
+            return covered / recovery.units.length >= candidate.evidence.phraseCoverage;
+          });
+          if (contextual) {
+            candidate.text = contextual.text;
+            candidate.evidence = { ...candidate.evidence, contextPairs: contextual.contextPairs };
+          }
           if (betterCandidate(candidate, best)) best = candidate;
         }
       }
