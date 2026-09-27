@@ -183,7 +183,19 @@ python tests/browser_smoke.py
 - Chromium：載入真正的擴充功能，執行候選、Tab、局部替換與輸入保護整合測試。
 - Playwright 版本固定於 `tests/requirements.txt`；瀏覽器依賴依照 [Playwright 官方 CI 說明](https://playwright.dev/python/docs/ci) 安裝。
 
-測試失敗時可在 Actions 查看失敗步驟與日誌。工作流程只有讀取程式碼權限，不會自動發佈版本；是否要求測試通過才能合併，需另由 repository 的分支規則設定。
+測試失敗時可在 Actions 查看失敗步驟與日誌。是否要求測試通過才能合併，需另由 repository 的分支規則設定。
+
+## 自動打包與發佈
+
+`scripts/package-release.py` 會從 manifest 收集執行檔案，加上 README 與 McBopomofo／libtabe 授權聲明，建立可重現的 ZIP 及 `SHA256SUMS.txt`。本機可執行：
+
+```sh
+python scripts/package-release.py
+```
+
+推送版本標籤後，[Release 工作流程](https://github.com/kaiwei6666/typing-recovery/actions/workflows/release.yml) 會確認標籤與 manifest 版本一致，執行核心、偵測及 Chromium 測試，才建立 GitHub Release 並上傳兩個檔案。`v0.*` 或名稱含 alpha／beta／rc 的標籤會標成預覽版；其他版本為正式版。
+
+例如準備 `v0.7.0` 時，先將 `manifest.json` 的版本改為 `0.7.0` 並把所有變更推到 main；確認 Tests 通過後，再建立並推送 `v0.7.0` 標籤。不要重複使用或移動已發佈的標籤。
 
 ## 試用回報與混合文字評估
 
