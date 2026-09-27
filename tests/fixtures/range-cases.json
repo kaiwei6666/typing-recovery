@@ -95,6 +95,61 @@
       ]
     },
     {
+      "raw": "npm i su3cl3",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 6,
+          "end": 12,
+          "text": "你好"
+        }
+      ]
+    },
+    {
+      "raw": "su3cl3 i",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 0,
+          "end": 6,
+          "text": "你好"
+        }
+      ]
+    },
+    {
+      "raw": "中文 su3cl3. 下一句",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 3,
+          "end": 9,
+          "text": "你好"
+        }
+      ]
+    },
+    {
+      "raw": "真的嗎 su3cl3?",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 4,
+          "end": 10,
+          "text": "你好"
+        }
+      ]
+    },
+    {
+      "raw": "g4ru,4, next",
+      "intent": "mistyped",
+      "ranges": [
+        {
+          "start": 0,
+          "end": 6,
+          "text": "世界"
+        }
+      ]
+    },
+    {
       "raw": "我想su3cl",
       "intent": "mistyped",
       "ranges": []

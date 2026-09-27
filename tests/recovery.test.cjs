@@ -388,6 +388,28 @@ test("range detection protects whole identifiers, links, email, paths and code",
   assert.equal(ranges[0].start, 29);
 });
 
+test("range detection does not absorb neighboring English or sentence punctuation", () => {
+  const api = loadExtension().context.TypingRecovery;
+  for (const [value, raw, text] of [
+    ["npm i su3cl3", "su3cl3", "你好"],
+    ["su3cl3 i", "su3cl3", "你好"],
+    ["中文 su3cl3. 下一句", "su3cl3", "你好"],
+    ["真的嗎 su3cl3?", "su3cl3", "你好"],
+    ["g4ru,4, next", "g4ru,4", "世界"],
+  ]) {
+    const ranges = api.findRecoveryRanges(value);
+    assert.equal(ranges.length, 1, value);
+    assert.equal(ranges[0].raw, raw, value);
+    assert.equal(ranges[0].text, text, value);
+    assert.equal(ranges[0].start, value.indexOf(raw), value);
+    assert.equal(ranges[0].end, value.indexOf(raw) + raw.length, value);
+  }
+  const combined = api.findRecoveryRanges("su3cl3 g4ru,4");
+  assert.equal(combined.length, 1);
+  assert.equal(combined[0].raw, "su3cl3 g4ru,4");
+  assert.equal(combined[0].text, "你好 世界");
+});
+
 test("range detection returns ordered ranges and refuses partial scans at limits", () => {
   const api = loadExtension().context.TypingRecovery;
   const ranges = api.findRecoveryRanges("su3cl3、g4ru,4");

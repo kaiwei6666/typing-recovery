@@ -340,6 +340,22 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
         panel.get_by_role("button", name="套用替換").click()
         expect(query).to_have_value("su3cl3、世界")
 
+        query.fill("npm i su3cl3")
+        expect(hint).to_be_visible()
+        expect(hint).to_contain_text("su3cl3")
+        expect(hint.locator("strong")).to_have_text("你好")
+        query.press("Tab")
+        expect(query).to_have_value("npm i 你好")
+        assert query.evaluate("e => e.selectionStart") == 8
+
+        query.fill("中文 su3cl3. 下一句")
+        expect(hint).to_be_visible()
+        expect(hint).to_contain_text("su3cl3")
+        query.press("Tab")
+        expect(query).to_have_value("中文 你好. 下一句")
+        assert query.evaluate("e => e.selectionStart") == 5
+        print("PASS: mixed range preserves adjacent English and ASCII sentence punctuation")
+
         query.fill(mixed)
         expect(hint).to_be_visible()
         query.evaluate("e => { e.value = '新' + e.value; }")
