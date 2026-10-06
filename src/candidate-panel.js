@@ -51,7 +51,7 @@
       return node;
     }
     make("h2", "選擇中文字").id = "candidate-title";
-    make("p", "先選擇建議組合，也可逐字調整。建議依離線詞庫、詞頻及緊鄰中文字排序，請確認預覽後再替換。").id = "candidate-help";
+    make("p", "先選擇建議組合，也可逐字調整。建議依離線詞庫、詞頻、緊鄰中文字及本頁已套用選字排序，請確認預覽後再替換。").id = "candidate-help";
     make("div", snapshot.raw, dialog, "source").setAttribute("aria-label", "原始文字");
     const status = make("p", "", dialog, "status");
     status.setAttribute("role", "status");
@@ -59,7 +59,9 @@
     const tooLong = recovery.units.length > 120;
     const rankingContext = globalThis.TypingRecovery.getRankingContext(
       snapshot.value, snapshot.start, snapshot.end);
-    const suggestions = tooLong ? [] : globalThis.TypingRecovery.rankCandidates(recovery, rankingContext);
+    const preferences = globalThis.TypingRecoveryPreferences.get(recovery);
+    const suggestions = tooLong ? [] : globalThis.TypingRecovery.rankCandidates(
+      recovery, rankingContext, preferences);
     const originalChoices = recovery.units.map((unit) => unit.candidates[0] ?? "");
     const choices = [...(suggestions[0]?.choices ?? originalChoices)];
     const selects = [];
@@ -144,7 +146,9 @@
           : selected ? "依單字詞頻組合，請確認是否符合原意。" : "已逐字調整，保留你的選擇。";
         const contextText = selected?.contextPairs.length
           ? `相鄰文字：${selected.contextPairs.join("、")}` : "";
-        phraseNote.textContent = [phraseText, contextText].filter(Boolean).join("；");
+        const preferenceText = selected?.preferenceCount
+          ? `本頁已套用 ${selected.preferenceCount} 次` : "";
+        phraseNote.textContent = [phraseText, contextText, preferenceText].filter(Boolean).join("；");
       }
     }
     function markStale() {
@@ -180,6 +184,7 @@
         updatePreview();
         return;
       }
+      globalThis.TypingRecoveryPreferences.record(recovery, choices);
       close(snapshot.start + preview.textContent.length);
     });
     if (tooLong) status.textContent = "一次最多處理 120 個音節，請反白較短的文字後重試。";
