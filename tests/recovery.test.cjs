@@ -277,6 +277,29 @@ test("ranking context uses only immediately adjacent Han characters", () => {
   assert.throws(() => api.getRankingContext(null, 0, 0), /valid UTF-16 range/);
 });
 
+test("page-session choices rerank candidates without changing automatic detection", () => {
+  const context = loadExtension().context;
+  const api = context.TypingRecovery;
+  const preferences = context.TypingRecoveryPreferences;
+  const recovery = api.getCandidateRecovery("cl3g4");
+  assert.equal(preferences.get(recovery).length, 0);
+  assert.equal(preferences.record(recovery, ["好", "市"]), true);
+  let stored = preferences.get(recovery);
+  assert.deepEqual(Array.from(stored[0].choices), ["好", "市"]);
+  assert.equal(stored[0].count, 1);
+  assert.equal(api.rankCandidates(recovery, {}, stored)[0].text, "好市");
+  assert.equal(api.rankCandidates(recovery)[0].text, "好事");
+  assert.equal(api.detectRecovery("cl3g4").reason, "ambiguous-candidate");
+  assert.equal(preferences.record(recovery, ["好", "市"]), true);
+  assert.equal(preferences.get(recovery)[0].count, 2);
+  assert.equal(preferences.record(recovery, ["不存在", "市"]), false);
+  preferences.clear();
+  assert.equal(preferences.get(recovery).length, 0);
+  const fresh = loadExtension().context;
+  assert.equal(fresh.TypingRecoveryPreferences.get(
+    fresh.TypingRecovery.getCandidateRecovery("cl3g4")).length, 0);
+});
+
 test("ranked suggestions are unique, ordered, bounded and selectable", () => {
   const api = loadExtension().context.TypingRecovery;
   for (const raw of ["su3cl3", "5j/ jp6", "g4ru,4", "su3@1m33🙂", "a87", "su3".repeat(120)]) {

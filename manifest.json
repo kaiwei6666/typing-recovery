@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Typing Recovery",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Recover Traditional Chinese Zhuyin typed with the wrong keyboard layout.",
   "content_scripts": [
     {
@@ -14,6 +14,7 @@
         "src/core/syllable-parser.js",
         "src/core/dictionary.js",
         "src/core/candidates.js",
+        "src/core/preferences.js",
         "src/core/phrases.js",
         "src/core/context.js",
         "src/core/ranker.js",

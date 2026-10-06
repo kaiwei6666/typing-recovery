@@ -68,12 +68,12 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
         expect(query).to_have_value("su3cl3")
         print("PASS: Escape and Cancel preserve original input")
 
-        query.fill("前🙂su3cl3後")
+        query.fill("前🙂g4ru,4後")
         query.evaluate("element => element.setSelectionRange(3, 9)")
         query.press("Control+Shift+U")
-        expect(panel.locator("output")).to_have_text("你好")
+        expect(panel.locator("output")).to_have_text("世界")
         panel.get_by_role("button", name="套用替換").click()
-        expect(query).to_have_value("前🙂你好後")
+        expect(query).to_have_value("前🙂世界後")
         assert query.evaluate("element => element.selectionStart") == 5
         print("PASS: selected range preserves surrounding Unicode text and cursor")
 
@@ -86,6 +86,12 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
         expect(query).to_have_value("好市場")
         assert query.evaluate("element => element.selectionStart") == 2
         print("PASS: adjacent Han context reranks a selected ambiguous range")
+
+        open_candidates("cl3g4")
+        expect(panel.locator("output")).to_have_text("好市")
+        expect(panel.locator(".phrase-note")).to_contain_text("本頁已套用 1 次")
+        panel.get_by_role("button", name="取消", exact=True).click()
+        print("PASS: an applied choice is preferred again within the same page")
 
         open_candidates("5j/ jp6")
         expect(panel.locator("output")).to_have_text("中文")
@@ -181,11 +187,12 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
             page.screenshot(path=str(args.hint_screenshot), full_page=True)
         hint.get_by_role("button", name="查看候選").click()
         expect(hint).to_have_count(0)
-        expect(panel.locator("output")).to_have_text("你好")
+        expect(panel.locator("output")).to_have_text("妳好")
+        expect(panel.locator(".phrase-note")).to_contain_text("本頁已套用 1 次")
         expect(query).to_have_value("su3cl3")
         panel.get_by_role("button", name="套用替換").click()
-        expect(query).to_have_value("你好")
-        print("PASS: passive automatic hint opens candidates without changing input")
+        expect(query).to_have_value("妳好")
+        print("PASS: passive hint stays conservative while candidate review uses page-session choices")
 
         query.fill("w96j0 ")
         expect(hint).to_be_visible()
@@ -340,9 +347,9 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
         query.fill("前🙂su3cl3後")
         expect(hint).to_be_visible()
         hint.get_by_role("button", name="查看候選").click()
-        expect(panel.locator("output")).to_have_text("你好")
+        expect(panel.locator("output")).to_have_text("妳好")
         panel.get_by_role("button", name="套用替換").click()
-        expect(query).to_have_value("前🙂你好後")
+        expect(query).to_have_value("前🙂妳好後")
         assert query.evaluate("e => e.selectionStart") == 5
 
         open_candidates("su3cl3、g4ru,4")
@@ -373,6 +380,12 @@ with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
         expect(query).to_have_value("新" + mixed)
         expect(password).to_be_focused()
         print("PASS: mixed range Tab, candidates, UTF-16 caret, last range and changed-context protection")
+
+        page.reload()
+        open_candidates("su3cl3")
+        expect(panel.locator("output")).to_have_text("你好")
+        panel.get_by_role("button", name="取消", exact=True).click()
+        print("PASS: page reload clears session-only candidate choices")
 
         assert not errors, errors
         print("PASS: narrow viewport; no page errors")

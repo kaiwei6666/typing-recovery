@@ -35,7 +35,7 @@
   // K-best paths through the fixed syllable sequence. Scores are smoothed
   // unigram log frequencies plus a small within-word continuity bonus,
   // NOT calibrated probabilities of user intent.
-  function rankCandidates(recovery, context = {}) {
+  function rankCandidates(recovery, context = {}, preferences = []) {
     const { units, raw } = recovery;
     if (!units.length || units.length > MAX_UNITS) return [];
     const rankingContext = {
@@ -89,10 +89,31 @@
         if (paths[start].length === pathLimit) break;
       }
     }
-    return paths[0].filter((path) => path.choices.some(Boolean)).map((path) => withContext({
+    const ranked = paths[0].filter((path) => path.choices.some(Boolean)).map((path) => withContext({
       ...path, text: globalThis.TypingRecovery.composeCandidates(recovery, path.choices),
-    }, rankingContext)).sort((a, b) => b.score - a.score || b.baseScore - a.baseScore)
-      .slice(0, LIMIT);
+      preferenceCount: 0,
+    }, rankingContext));
+    const byChoices = new Map(ranked.map((suggestion) => [JSON.stringify(suggestion.choices), suggestion]));
+    for (const preference of preferences) {
+      if (!Number.isSafeInteger(preference.count) || preference.count < 1 ||
+        !Array.isArray(preference.choices) || preference.choices.length !== units.length ||
+        preference.choices.some((choice, index) => !units[index].candidates.includes(choice))) continue;
+      const key = JSON.stringify(preference.choices);
+      const existing = byChoices.get(key);
+      if (existing) {
+        existing.preferenceCount = preference.count;
+        continue;
+      }
+      const baseScore = preference.choices.reduce((sum, char) =>
+        sum + score(globalThis.ZHUYIN_CHARACTER_COUNTS[char] ?? 0), 0);
+      const suggestion = withContext({ score: baseScore, choices: [...preference.choices], phrases: [],
+        text: globalThis.TypingRecovery.composeCandidates(recovery, preference.choices),
+        preferenceCount: preference.count }, rankingContext);
+      ranked.push(suggestion);
+      byChoices.set(key, suggestion);
+    }
+    return ranked.sort((a, b) => b.preferenceCount - a.preferenceCount ||
+      b.score - a.score || b.baseScore - a.baseScore).slice(0, LIMIT);
   }
 
   globalThis.TypingRecovery = Object.freeze({ ...globalThis.TypingRecovery, getRankingContext, rankCandidates });
