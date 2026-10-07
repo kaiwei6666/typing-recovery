@@ -15,6 +15,27 @@
 
 更新程式後，需重新載入擴充功能並重新整理 Google 頁面。Chrome 新分頁不在支援範圍內。支援可編輯的 textarea 與 text/search/url/tel input；密碼、唯讀、停用及不支援文字選取的欄位不處理，輸入法組字中也不觸發。
 
+## Phase 10：可重用 Core Engine／API
+
+- `src/core/engine.js` 提供不依賴 DOM 的高階介面；Chrome 擴充功能與後續桌面 App 可共用相同的解析、候選、排序及偵測規則。
+- 瀏覽器載入後可用 `TypingRecoveryCore.createEngine()`；Node.js 22 以上可直接 `require(".")`。目前套件標記為 private，尚未發布到 npm。
+- Core API 目前是初始合約 `0.1.0`，版本獨立於擴充功能 `0.9.0`。介面包含 `parse`、`analyze`、`detect`、`scan`、`getContext`、`remember` 與 `clearPreferences`。
+- 每次 `createEngine()` 都有互相隔離的記憶體選字紀錄。它不會存取 `chrome.storage`、Cookie、檔案或網路；關閉程序或頁面後資料即消失。
+- `analyze()` 會套用該 engine 的暫存偏好；保守的 `detect()` 與 `scan()` 不使用偏好放寬自動提示門檻。原本的低階 `TypingRecovery` 介面仍保留，避免改變擴充功能行為。
+- Node.js 入口在獨立的 VM context 載入同一組核心檔案，不載入候選視窗、輸入框操作或自動提示等瀏覽器 UI 程式碼。
+
+```js
+const { createEngine } = require(".");
+
+const engine = createEngine();
+const result = engine.analyze("su3cl3");
+result.zhuyin;                 // "ㄋㄧˇㄏㄠˇ"
+result.suggestions[0].text;   // "你好"
+
+engine.detect("su3cl3").text; // "你好"
+engine.scan("查 su3cl3 的意思")[0].text; // "你好"
+```
+
 ## Phase 9：本頁選字記憶
 
 - 在候選視窗實際套用的完整選字組合，會在**目前頁面**暫時記住；同一組注音再次開啟候選時，已套用的選擇排在前面，套用次數較多者優先。
@@ -188,10 +209,10 @@ const result = TypingRecovery.parseKeystrokes("su3cl3");
 不需安裝套件，使用 Node.js 22 或以上執行：
 
 ```sh
-node --test tests/recovery.test.cjs
+npm test
 ```
 
-涵蓋音節邊界、聲調、不完整輸入、Unicode、原文重建、字典查詢、詞彙完整性、同音字排序、不同斷詞比較、候選組合、偵測策略案例及使用模擬輸入框的快捷鍵整合。
+不需安裝 npm 套件。測試涵蓋 Core API 合約與記憶隔離，以及音節邊界、聲調、不完整輸入、Unicode、原文重建、字典查詢、詞彙完整性、同音字排序、不同斷詞比較、候選組合、偵測策略案例及使用模擬輸入框的快捷鍵整合。
 
 選用的瀏覽器整合測試需 Python 與 Playwright：
 
@@ -223,7 +244,7 @@ python scripts/package-release.py
 
 推送版本標籤後，[Release 工作流程](https://github.com/kaiwei6666/typing-recovery/actions/workflows/release.yml) 會確認標籤與 manifest 版本一致，執行核心、偵測及 Chromium 測試，才建立 GitHub Release 並上傳兩個檔案。`v0.*` 或名稱含 alpha／beta／rc 的標籤會標成預覽版；其他版本為正式版。
 
-例如準備 `v0.8.0` 時，先將 `manifest.json` 的版本改為 `0.8.0` 並把所有變更推到 main；確認 Tests 通過後，再建立並推送 `v0.8.0` 標籤。不要重複使用或移動已發佈的標籤。
+例如準備 `v0.9.0` 時，先將 `manifest.json` 與 `package.json` 的版本改為 `0.9.0` 並把所有變更推到 main；確認 Tests 通過後，再建立並推送 `v0.9.0` 標籤。不要重複使用或移動已發佈的標籤。
 
 ## 試用回報與混合文字評估
 
@@ -241,4 +262,4 @@ node scripts/evaluate-ranges.cjs
 
 ## 接下來
 
-接下來蒐集實際使用的誤報／漏報、語境排序及本頁選字案例。音節切分歧義、更長距離的上下文與跨頁持久個人化仍待後續處理；所有替換仍需使用者明確操作。
+接下來先讓 Chrome 擴充功能與 Node.js 共用的 Core API 穩定，再評估原始路線圖中的 Windows／macOS App。期間持續蒐集實際使用的誤報／漏報、語境排序及本頁選字案例。音節切分歧義、更長距離的上下文與跨頁持久個人化仍待後續處理；所有替換仍需使用者明確操作。

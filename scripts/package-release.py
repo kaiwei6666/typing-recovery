@@ -30,6 +30,9 @@ def main():
 
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
     version = manifest["version"]
+    package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    if package.get("version") != version:
+        raise SystemExit("package.json version does not match manifest.json")
     if args.tag and args.tag != f"v{version}":
         raise SystemExit(f"Tag {args.tag!r} does not match manifest version {version!r}")
 
