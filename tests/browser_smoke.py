@@ -26,16 +26,19 @@ textarea{display:block;width:600px;height:100px;font:24px system-ui;margin-top:2
 
 with tempfile.TemporaryDirectory(prefix="typing-recovery-browser-") as profile:
     assert Path(profile).resolve().parent == Path(tempfile.gettempdir()).resolve()
+    print("START: launching Chromium with the unpacked extension", flush=True)
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
             profile, channel="chromium", headless=True, viewport={"width": 1024, "height": 900},
             args=[f"--disable-extensions-except={ROOT}", f"--load-extension={ROOT}"],
         )
+        print("START: Chromium launched", flush=True)
         context.route("**/*", lambda route: route.fulfill(content_type="text/html", body=FIXTURE))
         page = context.new_page()
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.goto("https://www.google.com/")
+        print("START: local Google fixture loaded", flush=True)
         query = page.locator("#query")
         panel = page.locator("#typing-recovery-panel")
 
